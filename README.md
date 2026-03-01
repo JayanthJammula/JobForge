@@ -6,11 +6,11 @@ A full-stack career intelligence platform that combines job search, AI-powered i
 
 - **Job Search** - Browse and search job listings powered by the JSearch API
 - **AI Interview Prep** - Generate tailored interview questions and mock interviews with AI feedback
-- **Resume Builder** - FlowCV-style resume editor with live preview, customizable styling, and PDF export
+- **Resume Builder** - Resume editor with live preview, customizable styling, and PDF export
 - **Resume Tailoring** - AI-powered resume optimization for specific job descriptions
 - **Smart Match** - AI-driven job matching based on your profile (skills, experience, salary preferences)
-- **Coding Challenges** - LeetCode-style practice problems generated from job descriptions **(Working on it)**
-- **Learning Paths** - Personalized learning recommendations based on job requirements **(Working on it)**
+- **Coding Challenges** - LeetCode-style practice problems generated from job descriptions **(Still working on it)**
+- **Learning Paths** - Personalized learning recommendations based on job requirements **(Still working on it)**
 
 ## Tech Stack
 
