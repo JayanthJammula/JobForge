@@ -50,3 +50,11 @@ src/assets/
 
 # AI editor guidelines
 src/guidelines/
+
+# Python / Backend
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+backend/.env
