@@ -17,9 +17,11 @@ async def init_db():
     # Run migrations on first connect
     async with _pool.acquire() as conn:
         migrations_dir = os.path.join(os.path.dirname(__file__), "migrations")
-        migration_file = os.path.join(migrations_dir, "001_initial_schema.sql")
-        if os.path.exists(migration_file):
-            with open(migration_file, "r") as f:
+        for migration_file in sorted(
+            f for f in os.listdir(migrations_dir) if f.endswith(".sql")
+        ):
+            path = os.path.join(migrations_dir, migration_file)
+            with open(path, "r") as f:
                 await conn.execute(f.read())
 
 

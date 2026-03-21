@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { Badge } from "./ui/badge";
 import { Progress } from "./ui/progress";
 import { useEffect, useMemo, useState } from "react";
+import { safeUrl } from "../lib/urlSanitizer";
 
 interface LearningPathPageProps {
   jobId: string;
@@ -27,45 +28,45 @@ const feedbackData = {
     {
       id: 1,
       type: "video",
-      title: "Advanced TypeScript Patterns",
-      description: "Learn advanced TypeScript patterns including generics, conditional types, and utility types.",
-      link: "#",
+      title: "TypeScript Full Course - Net Ninja",
+      description: "Learn TypeScript from scratch including generics, interfaces, and advanced patterns.",
+      link: "https://www.youtube.com/@NetNinja",
       duration: "2h 30m",
       difficulty: "Advanced"
     },
     {
       id: 2,
       type: "article",
-      title: "React Performance Optimization",
-      description: "Comprehensive guide to optimizing React applications for production.",
-      link: "#",
+      title: "React Performance - Official Docs",
+      description: "Official React documentation on optimizing rendering and avoiding unnecessary re-renders.",
+      link: "https://react.dev/learn",
       duration: "15 min read",
       difficulty: "Intermediate"
     },
     {
       id: 3,
-      type: "course",
-      title: "System Design Interview Prep",
-      description: "Master system design concepts with real-world examples and practice problems.",
-      link: "#",
+      type: "practice",
+      title: "System Design Primer - GitHub",
+      description: "Open-source guide to system design concepts with real-world examples and practice problems.",
+      link: "https://github.com/donnemartin/system-design-primer",
       duration: "8 hours",
       difficulty: "Advanced"
     },
     {
       id: 4,
-      type: "video",
-      title: "Behavioral Interview Masterclass",
+      type: "article",
+      title: "Behavioral Interview Guide - Tech Interview Handbook",
       description: "Learn how to structure compelling answers using the STAR method.",
-      link: "#",
-      duration: "1h 45m",
+      link: "https://www.techinterviewhandbook.org/behavioral-interview/",
+      duration: "20 min read",
       difficulty: "Beginner"
     },
     {
       id: 5,
       type: "article",
-      title: "Code Review Best Practices",
-      description: "Essential skills for reviewing code and collaborating with teams effectively.",
-      link: "#",
+      title: "Code Review Best Practices - Google Engineering",
+      description: "Google's guide to effective code reviews and team collaboration.",
+      link: "https://google.github.io/eng-practices/review/",
       duration: "10 min read",
       difficulty: "Intermediate"
     }
@@ -250,11 +251,11 @@ export function LearningPathPage({ jobId, onBack, onRetakeInterview }: LearningP
                     </div>
                   )}
 
-                  {Array.isArray(topic.resources) && topic.resources.length > 0 && (
+                  {Array.isArray(topic.resources) && topic.resources.filter((r: any) => r.url && safeUrl(r.url)).length > 0 && (
                     <div>
                       <h3 className="text-sm font-medium mb-2">Resources</h3>
                       <div className="space-y-3">
-                        {topic.resources.map((resource: any, rIdx: number) => (
+                        {topic.resources.filter((r: any) => r.url && safeUrl(r.url)).map((resource: any, rIdx: number) => (
                           <div key={rIdx} className="p-3 rounded-md border bg-background">
                             <div className="flex items-start justify-between gap-4">
                               <div className="min-w-0">
@@ -264,10 +265,7 @@ export function LearningPathPage({ jobId, onBack, onRetakeInterview }: LearningP
                                     <span className="text-xs text-muted-foreground">{resource.provider}</span>
                                   )}
                                 </div>
-                                <div className="font-medium break-words">{resource.title}</div>
-                                {resource.url && (
-                                  <a href={resource.url} target="_blank" rel="noreferrer" className="text-xs text-primary underline break-all">{resource.url}</a>
-                                )}
+                                <a href={safeUrl(resource.url)} target="_blank" rel="noreferrer" className="font-medium break-words text-primary underline">{resource.title}</a>
                                 {resource.cost || resource.est_time_hours ? (
                                   <div className="text-xs text-muted-foreground mt-1">
                                     {resource.cost && <span>Cost: {resource.cost}</span>}
@@ -282,6 +280,7 @@ export function LearningPathPage({ jobId, onBack, onRetakeInterview }: LearningP
                       </div>
                     </div>
                   )}
+
                 </CardContent>
               </Card>
             ))}
@@ -341,7 +340,7 @@ export function LearningPathPage({ jobId, onBack, onRetakeInterview }: LearningP
           </div>
 
           <div className="space-y-4">
-            {((plan?.resources && plan.resources.length > 0) ? plan.resources : feedbackData.resources).map((resource: any) => (
+            {((plan?.resources && plan.resources.length > 0) ? plan.resources : feedbackData.resources).filter((r: any) => safeUrl(r.link || r.url)).map((resource: any) => (
               <Card key={resource.id ?? resource.title} className="hover:shadow-lg transition-shadow">
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
@@ -367,9 +366,9 @@ export function LearningPathPage({ jobId, onBack, onRetakeInterview }: LearningP
                           </Badge>
                           {resource.duration && <span>{resource.duration}</span>}
                         </div>
-                        {resource.link && (
+                        {resource.link && safeUrl(resource.link) && (
                           <Button asChild size="sm" variant="outline">
-                            <a href={resource.link} target="_blank" rel="noreferrer">View Resource</a>
+                            <a href={safeUrl(resource.link)} target="_blank" rel="noreferrer">View Resource</a>
                           </Button>
                         )}
                       </div>

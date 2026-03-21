@@ -1,3 +1,5 @@
+import { fetchAI, fetchData } from "../lib/apiClient";
+
 const API_BASE = "/api";
 
 // ---- Market Intelligence ----
@@ -153,7 +155,7 @@ export async function generateChallenges(
   count = 3,
   targetLanguage = "javascript"
 ): Promise<CodingChallenge[]> {
-  const res = await fetch(`/challenges/generate`, {
+  const res = await fetchAI(`/challenges/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -163,8 +165,10 @@ export async function generateChallenges(
       target_language: targetLanguage,
     }),
   });
-  if (!res.ok) throw new Error("Failed to generate challenges");
-  return res.json();
+  if (!res.ok) throw new Error(`Failed to generate challenges (${res.status})`);
+  const data = await res.json();
+  // Backend now wraps in { challenges: [...], _ai_meta: {...} }
+  return data.challenges || data;
 }
 
 export async function fetchChallenge(id: number): Promise<CodingChallenge> {

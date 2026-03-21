@@ -292,6 +292,12 @@ export function JobsPage({ onJobClick, cachedJobs = [], onJobsFetched }: JobsPag
           <p className="text-muted-foreground">No jobs found matching your criteria.</p>
         </div>
       )}
+      {/* Data source attribution */}
+      {filteredJobs.length > 0 && (
+        <p className="text-center text-xs text-muted-foreground mt-6 pb-4">
+          Job data provided by JSearch API
+        </p>
+      )}
     </div>
   );
 }

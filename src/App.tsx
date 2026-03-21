@@ -9,6 +9,8 @@ import { ProfilePage } from "./components/ProfilePage";
 import { TailorResumePage } from "./components/TailorResumePage";
 import { SmartMatchPage } from "./components/SmartMatchPage";
 import { CodingChallengePage } from "./components/CodingChallengePage";
+import { PulseDashboardPage } from "./components/PulseDashboardPage";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 type Page =
   | "jobs"
@@ -19,7 +21,8 @@ type Page =
   | "profile"
   | "tailor-resume"
   | "smart-match"
-  | "coding-challenge";
+  | "coding-challenge"
+  | "pulse-dashboard";
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>("jobs");
@@ -77,6 +80,10 @@ export default function App() {
     setCurrentPage("smart-match");
   };
 
+  const handleGoToPulse = () => {
+    setCurrentPage("pulse-dashboard");
+  };
+
   const handleStartCodingChallenge = (jobId: string, jobData?: any) => {
     setSelectedJobId(jobId);
     setSelectedJobData(jobData);
@@ -84,11 +91,13 @@ export default function App() {
   };
 
   return (
+    <ErrorBoundary onReset={handleBackToJobs}>
     <div className="min-h-screen flex flex-col">
       {currentPage === "jobs" && (
         <Header
           onProfileClick={handleGoToProfile}
           onSmartMatchClick={handleGoToSmartMatch}
+          onPulseClick={handleGoToPulse}
         />
       )}
 
@@ -144,6 +153,10 @@ export default function App() {
           />
         )}
 
+        {currentPage === "pulse-dashboard" && (
+          <PulseDashboardPage onBack={handleBackToJobs} />
+        )}
+
         {currentPage === "smart-match" && (
           <SmartMatchPage
             onBack={handleBackToJobs}
@@ -160,5 +173,6 @@ export default function App() {
         )}
       </main>
     </div>
+    </ErrorBoundary>
   );
 }

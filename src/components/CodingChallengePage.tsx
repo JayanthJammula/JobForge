@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, Play, Loader2, CheckCircle2, XCircle, ChevronRight, Lightbulb, Code2 } from "lucide-react";
+import { ArrowLeft, Play, Loader2, CheckCircle2, XCircle, ChevronRight, Lightbulb, Code2, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { generateChallenges, type CodingChallenge } from "../services/pulseApi";
 import { runTestCases, type RunResult } from "../lib/codeRunner";
+import { AIBadge } from "./ui/ai-badge";
 
 interface Props {
   jobId: string;
@@ -41,7 +42,12 @@ export function CodingChallengePage({ jobId, jobData, onBack }: Props) {
         setCode(starter);
       }
     } catch (e: any) {
-      setError(e.message || "Failed to generate challenges");
+      const msg = e.message || "";
+      if (msg.includes("429") || msg.toLowerCase().includes("rate limit")) {
+        setError("rate_limit");
+      } else {
+        setError(msg || "Failed to generate challenges");
+      }
     } finally {
       setLoading(false);
     }
@@ -119,7 +125,14 @@ export function CodingChallengePage({ jobId, jobData, onBack }: Props) {
         </Button>
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-destructive mb-4">{error}</p>
+            {error === "rate_limit" ? (
+              <>
+                <p className="text-amber-600 dark:text-amber-400 mb-2 font-medium">AI rate limit reached</p>
+                <p className="text-muted-foreground text-sm mb-4">The AI service is temporarily busy. Please wait a minute and try again.</p>
+              </>
+            ) : (
+              <p className="text-destructive mb-4">{error}</p>
+            )}
             <Button onClick={loadChallenges}>Retry</Button>
           </CardContent>
         </Card>
@@ -136,6 +149,7 @@ export function CodingChallengePage({ jobId, jobData, onBack }: Props) {
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
           <h1 className="text-xl font-bold">Coding Challenges</h1>
+          {challenges.length > 0 && <AIBadge />}
         </div>
         <div className="flex items-center gap-2">
           <Select value={difficulty} onValueChange={setDifficulty}>
@@ -157,6 +171,9 @@ export function CodingChallengePage({ jobId, jobData, onBack }: Props) {
               <SelectItem value="python">Python</SelectItem>
             </SelectContent>
           </Select>
+          <Button variant="outline" size="sm" onClick={loadChallenges} disabled={loading} title="Generate new challenges">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
         </div>
       </div>
 
@@ -271,7 +288,7 @@ export function CodingChallengePage({ jobId, jobData, onBack }: Props) {
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  className="w-full h-80 bg-zinc-950 text-green-400 font-mono text-sm p-4 rounded-md border border-border resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="w-full min-h-[500px] bg-zinc-950 text-green-400 font-mono text-sm p-4 rounded-md border border-border resize-y focus:outline-none focus:ring-1 focus:ring-ring"
                   spellCheck={false}
                   placeholder="Write your solution here..."
                 />

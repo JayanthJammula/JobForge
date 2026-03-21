@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List, Literal, Annotated, Dict, Any
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List, Literal, Annotated, Dict, Any, Union
 import uuid
 
 class RawJob(BaseModel):
@@ -43,6 +43,25 @@ class CodingMeta(BaseModel):
     target_language: Optional[str] = Field(default="TypeScript")
     constraints: List[str] = Field(default_factory=list)
     examples: List[str] = Field(default_factory=list)
+
+    @field_validator("examples", mode="before")
+    @classmethod
+    def coerce_examples_to_strings(cls, v):
+        """AI sometimes returns examples as objects {input, output} instead of strings."""
+        if not isinstance(v, list):
+            return v
+        result = []
+        for item in v:
+            if isinstance(item, dict):
+                parts = []
+                if "input" in item:
+                    parts.append(f"Input: {item['input']}")
+                if "output" in item:
+                    parts.append(f"Output: {item['output']}")
+                result.append(", ".join(parts))
+            else:
+                result.append(str(item))
+        return result
 
 class Question(BaseModel):
     question_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -168,3 +187,28 @@ class GuidanceRequest(BaseModel):
 
 class GuidanceResponse(BaseModel):
     guidance: str
+
+
+# Coding challenge models
+class ChallengeTestCase(BaseModel):
+    input: str
+    expected_output: str
+    is_hidden: bool = False
+
+class ChallengeExample(BaseModel):
+    input: str
+    output: str
+    explanation: str = ""
+
+class CodingChallengeGenerated(BaseModel):
+    """Validated schema for a single AI-generated coding challenge."""
+    title: str
+    description: str
+    difficulty: str
+    category: str = "general"
+    related_skills: List[str] = []
+    starter_code: Dict[str, str] = {}
+    test_cases: List[ChallengeTestCase]
+    examples: List[ChallengeExample] = []
+    constraints: List[str] = []
+    solution_hints: List[str] = []

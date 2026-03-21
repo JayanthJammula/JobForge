@@ -33,6 +33,35 @@ DEFAULT_QUERIES = [
 ]
 
 
+def _validate_job_fields(raw_job) -> Optional[str]:
+    """Validate raw job fields. Returns error message if invalid, None if OK."""
+    title = raw_job.job_title or ""
+    company = raw_job.employer_name or ""
+
+    if not title.strip():
+        return "empty title"
+    if len(title) > 500:
+        return f"title too long ({len(title)} chars)"
+    if not company.strip():
+        return "empty company"
+    if len(company) > 300:
+        return f"company name too long ({len(company)} chars)"
+
+    # Validate apply link protocol if present
+    link = raw_job.job_apply_link or ""
+    if link and not link.startswith(("http://", "https://")):
+        return f"invalid apply_link protocol: {link[:50]}"
+
+    # Validate salary ordering
+    if (raw_job.job_salary_min is not None and raw_job.job_salary_max is not None
+            and raw_job.job_salary_min > raw_job.job_salary_max):
+        # Swap instead of rejecting — log a warning
+        raw_job.job_salary_min, raw_job.job_salary_max = raw_job.job_salary_max, raw_job.job_salary_min
+        logger.warning(f"Swapped inverted salary range for '{title}' at '{company}'")
+
+    return None
+
+
 async def _ensure_skill(conn, skill_name: str, category: str) -> int:
     """Insert skill if not exists, return skill id."""
     name_lower = skill_name.lower().strip()
@@ -60,12 +89,13 @@ async def run_etl(
     """Run the full ETL pipeline.
 
     1. Fetch jobs from JSearch for each query
-    2. Deduplicate via fingerprinting
-    3. Normalize salary, location, seniority
-    4. Extract skills
-    5. Store in PostgreSQL
+    2. Validate and filter bad records
+    3. Deduplicate via fingerprinting
+    4. Normalize salary, location, seniority
+    5. Extract skills
+    6. Store in PostgreSQL
 
-    Returns summary stats.
+    Returns summary stats including data quality metrics.
     """
     pool = await get_pool()
     queries = queries or DEFAULT_QUERIES[:5]  # Limit to 5 queries to stay in free tier
@@ -75,6 +105,13 @@ async def run_etl(
     total_updated = 0
     total_skills_linked = 0
     errors = []
+
+    # Data quality counters
+    records_skipped = 0
+    salary_data_present = 0
+    salary_data_missing = 0
+    salary_bounds_violations = 0
+    skill_extraction_zero = 0
 
     # Log ETL run start
     async with pool.acquire() as conn:
@@ -105,12 +142,24 @@ async def run_etl(
 
             async with pool.acquire() as conn:
                 for raw_job in raw_jobs:
+                    # Field validation
+                    validation_error = _validate_job_fields(raw_job)
+                    if validation_error:
+                        records_skipped += 1
+                        logger.warning(f"Skipped job: {validation_error}")
+                        continue
+
                     title = raw_job.job_title or "Unknown"
                     company = raw_job.employer_name or "Unknown"
                     city = raw_job.job_city or ""
                     state = raw_job.job_state or ""
                     location_str = normalize_location(city, state)
                     description = raw_job.job_description or ""
+
+                    # Truncate excessively long descriptions
+                    if len(description) > 50_000:
+                        logger.warning(f"Truncated description for '{title}' ({len(description)} chars)")
+                        description = description[:50_000]
 
                     fingerprint = generate_fingerprint(title, company, location_str)
 
@@ -128,7 +177,7 @@ async def run_etl(
                         total_updated += 1
                         continue
 
-                    # Normalize salary
+                    # Normalize salary with bounds checking
                     salary_min = raw_job.job_salary_min
                     salary_max = raw_job.job_salary_max
                     salary_period = raw_job.job_salary_period or ""
@@ -140,6 +189,18 @@ async def run_etl(
                     annual_max = normalize_salary_to_annual(
                         salary_max, salary_period, salary_currency
                     ) if salary_max else None
+
+                    # Track salary data quality
+                    if annual_min is not None or annual_max is not None:
+                        salary_data_present += 1
+                    else:
+                        salary_data_missing += 1
+
+                    # Detect bounds violations (salary was present but got nullified)
+                    if salary_min and annual_min is None:
+                        salary_bounds_violations += 1
+                    if salary_max and annual_max is None:
+                        salary_bounds_violations += 1
 
                     # Infer seniority
                     seniority = infer_seniority(title, description)
@@ -193,6 +254,9 @@ async def run_etl(
 
                     # Extract and link skills
                     skills = extract_skills(description)
+                    if not skills:
+                        skill_extraction_zero += 1
+
                     for skill_info in skills:
                         skill_id = await _ensure_skill(
                             conn, skill_info["name"], skill_info["category"]
@@ -205,7 +269,22 @@ async def run_etl(
                         )
                         total_skills_linked += 1
 
-        # Mark ETL run as completed
+        # Mark ETL run as completed with quality metrics
+        quality_metrics = {
+            "total_fetched": total_fetched,
+            "new_jobs": total_new,
+            "updated_jobs": total_updated,
+            "skills_linked": total_skills_linked,
+            "errors": errors,
+            "data_quality": {
+                "records_skipped_validation": records_skipped,
+                "salary_data_present": salary_data_present,
+                "salary_data_missing": salary_data_missing,
+                "salary_bounds_violations": salary_bounds_violations,
+                "skill_extraction_zero_count": skill_extraction_zero,
+            },
+        }
+
         async with pool.acquire() as conn:
             await conn.execute(
                 """UPDATE etl_runs
@@ -214,15 +293,14 @@ async def run_etl(
                        metadata = metadata || $2::jsonb
                    WHERE id = $3""",
                 total_new,
-                json.dumps({
-                    "total_fetched": total_fetched,
-                    "new_jobs": total_new,
-                    "updated_jobs": total_updated,
-                    "skills_linked": total_skills_linked,
-                    "errors": errors,
-                }),
+                json.dumps(quality_metrics),
                 run_id,
             )
+
+        logger.info(
+            f"ETL completed: {total_new} new, {total_updated} updated, "
+            f"{records_skipped} skipped, {salary_bounds_violations} salary violations"
+        )
 
     except Exception as e:
         async with pool.acquire() as conn:
@@ -241,5 +319,12 @@ async def run_etl(
         "new_jobs": total_new,
         "updated_jobs": total_updated,
         "skills_linked": total_skills_linked,
+        "records_skipped": records_skipped,
         "errors": errors,
+        "data_quality": {
+            "salary_data_present": salary_data_present,
+            "salary_data_missing": salary_data_missing,
+            "salary_bounds_violations": salary_bounds_violations,
+            "skill_extraction_zero_count": skill_extraction_zero,
+        },
     }

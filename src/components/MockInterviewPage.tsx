@@ -8,6 +8,7 @@ import { Textarea } from "./ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
 import { ConversationDialog } from "./ConversationDialog";
+import { AIBadge } from "./ui/ai-badge";
 import { jobApiService, InterviewQuestion, InterviewQuestionsResponse } from "../services/jobApi";
 import { getStoredResumeSections } from "../lib/resumeStore";
 
@@ -639,12 +640,15 @@ export function MockInterviewPage({ jobId, jobData, onBack, onComplete }: MockIn
             <Card className="h-fit">
               <CardHeader>
                 <div className="flex items-center justify-between mb-2">
-                  <Badge variant={currentQuestion.kind === "coding" ? "default" : "secondary"}>
-                    {currentQuestion.kind}
-                  </Badge>
-                  <Badge className={`${getDifficultyColor(currentQuestion.coding?.difficulty || difficulty)} text-white`}>
-                    {currentQuestion.coding?.difficulty || difficulty}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={currentQuestion.kind === "coding" ? "default" : "secondary"}>
+                      {currentQuestion.kind}
+                    </Badge>
+                    <Badge className={`${getDifficultyColor(currentQuestion.coding?.difficulty || difficulty)} text-white`}>
+                      {currentQuestion.coding?.difficulty || difficulty}
+                    </Badge>
+                    <AIBadge />
+                  </div>
                 </div>
                 <div className="flex items-center justify-between mb-2">
                   <CardTitle>Question {currentQuestionIndex + 1}</CardTitle>

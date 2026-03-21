@@ -1,15 +1,21 @@
 """Coding Challenge generation and management endpoints."""
 
 import json
+import structlog
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from typing import List, Optional, Dict, Any
 
 from db.connection import get_pool
-from services import ai_client
+from services import ai_client, MODELS_HEAVY
 from google.genai import types
+from models import CodingChallengeGenerated
+from ai_utils import (
+    call_gemini, AIRateLimitError, AISchemaValidationError, AIServiceError,
+)
 
 router = APIRouter(prefix="/challenges", tags=["challenges"])
+logger = structlog.get_logger("challenges")
 
 
 class CodingChallengeRequest(BaseModel):
@@ -86,19 +92,41 @@ async def generate_challenges(request: CodingChallengeRequest):
             response_mime_type="application/json",
         )
 
-        response = ai_client.models.generate_content(
-            model='models/gemini-flash-latest',
+        result = call_gemini(
+            ai_client,
+            models=MODELS_HEAVY,
             contents=[{"role": "user", "parts": [{"text": prompt}]}],
             config=config,
+            operation="generate_challenges",
         )
 
-        challenges = json.loads(response.text)
+        raw_challenges = json.loads(result.raw_text)
+
+        # Validate each challenge with Pydantic, skip invalid ones
+        validated = []
+        for i, raw in enumerate(raw_challenges):
+            try:
+                challenge = CodingChallengeGenerated.model_validate(raw)
+                validated.append(challenge)
+            except ValidationError as ve:
+                logger.warning(
+                    "challenge_validation_skipped",
+                    index=i,
+                    title=raw.get("title", "unknown"),
+                    error=str(ve),
+                )
+
+        if not validated:
+            raise AISchemaValidationError(
+                "All generated challenges failed validation",
+                raw_text=result.raw_text,
+            )
 
         # Store in database
         pool = await get_pool()
         stored = []
         async with pool.acquire() as conn:
-            for challenge in challenges:
+            for challenge in validated:
                 row = await conn.fetchrow(
                     """INSERT INTO coding_challenges (
                         title, description, difficulty, category,
@@ -106,24 +134,31 @@ async def generate_challenges(request: CodingChallengeRequest):
                         solution_hints, constraints, examples
                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                     RETURNING id""",
-                    challenge.get("title", "Untitled"),
-                    challenge.get("description", ""),
-                    challenge.get("difficulty", request.difficulty),
-                    challenge.get("category", "general"),
-                    challenge.get("related_skills", []),
-                    json.dumps(challenge.get("starter_code", {})),
-                    json.dumps(challenge.get("test_cases", [])),
-                    challenge.get("solution_hints", []),
-                    challenge.get("constraints", []),
-                    json.dumps(challenge.get("examples", [])),
+                    challenge.title,
+                    challenge.description,
+                    challenge.difficulty,
+                    challenge.category,
+                    challenge.related_skills,
+                    json.dumps(challenge.starter_code),
+                    json.dumps([tc.model_dump() for tc in challenge.test_cases]),
+                    challenge.solution_hints,
+                    challenge.constraints,
+                    json.dumps([ex.model_dump() for ex in challenge.examples]),
                 )
-                challenge["id"] = row["id"]
-                stored.append(challenge)
+                d = challenge.model_dump()
+                d["id"] = row["id"]
+                stored.append(d)
 
-        return stored
+        return {"challenges": stored, "_ai_meta": result.meta.model_dump()}
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Challenge generation failed: {str(e)}")
+    except AIRateLimitError:
+        raise HTTPException(status_code=429, detail="AI service is rate limited. Please try again in a moment.")
+    except AISchemaValidationError:
+        raise HTTPException(status_code=502, detail="AI returned an unexpected response format. Please try again.")
+    except AIServiceError:
+        raise HTTPException(status_code=503, detail="AI service is temporarily unavailable.")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Challenge generation failed.")
 
 
 @router.get("/{challenge_id}")

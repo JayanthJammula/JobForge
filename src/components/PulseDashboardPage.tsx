@@ -165,10 +165,13 @@ export function PulseDashboardPage({ onBack }: Props) {
             </TabsContent>
           </Tabs>
 
-          {/* Top Skills Quick View */}
-          {overview && overview.top_skills.length > 0 && (
-            <div className="text-xs text-muted-foreground text-center">
-              Last updated: {overview.last_updated}
+          {/* Data source attribution */}
+          {overview && (
+            <div className="text-xs text-muted-foreground text-center space-y-1">
+              {overview.top_skills.length > 0 && (
+                <div>Last updated: {overview.last_updated}</div>
+              )}
+              <div>Job data provided by JSearch API</div>
             </div>
           )}
         </div>

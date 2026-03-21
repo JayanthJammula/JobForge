@@ -5,6 +5,7 @@ import { Badge } from "./ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Progress } from "./ui/progress";
 import { jobApiService, JobAnalysisResponse } from "../services/jobApi";
+import { AIBadge } from "./ui/ai-badge";
 
 interface Job {
   id: string;
@@ -149,7 +150,10 @@ export function JobDetailPage({ jobId, jobData, onBack, onStartInterview, onTail
                 ) : jobAnalysis ? (
                   <div className="space-y-4">
                     <div>
-                      <h4 className="font-semibold mb-2">Summary</h4>
+                      <div className="flex items-center gap-2 mb-2">
+                        <h4 className="font-semibold">Summary</h4>
+                        <AIBadge meta={(jobAnalysis as any)._ai_meta} />
+                      </div>
                       <p className="text-muted-foreground">{jobAnalysis.description_summary}</p>
                     </div>
                     <div>

@@ -1,3 +1,5 @@
+import { fetchAI, fetchData } from "../lib/apiClient";
+
 export interface JobApiResponse {
     job_id: string;
     job_title: string;
@@ -26,10 +28,18 @@ export interface JobAnalysisRequest {
     job_description: string;
 }
 
+export interface AIMeta {
+    model_used: string;
+    generated_at: string;
+    latency_ms: number;
+    fallback_used: boolean;
+}
+
 export interface JobAnalysisResponse {
     description_summary: string;
     requirements: string[];
     required_skills: string[];
+    _ai_meta?: AIMeta;
 }
 
 export interface InterviewQuestionRequest {
@@ -60,6 +70,7 @@ export interface InterviewQuestionsResponse {
     job_title: string;
     summary: string;
     questions: InterviewQuestion[];
+    _ai_meta?: AIMeta;
 }
 
 export class JobApiService {
@@ -68,7 +79,6 @@ export class JobApiService {
     async searchJobs(params: JobSearchParams = {}): Promise<JobApiResponse[]> {
         const searchParams = new URLSearchParams();
 
-        // Set default values
         const {
             query = '',
             page = 1,
@@ -86,9 +96,7 @@ export class JobApiService {
         searchParams.append('job_requirements', job_requirements);
 
         try {
-            const response = await fetch(`${this.baseUrl}/jobs?${searchParams.toString()}`, {
-                method: 'GET',
-            });
+            const response = await fetchData(`${this.baseUrl}/jobs?${searchParams.toString()}`);
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -104,14 +112,10 @@ export class JobApiService {
 
     async analyzeJob(jobDescription: string): Promise<JobAnalysisResponse> {
         try {
-            const response = await fetch(`${this.baseUrl}/analysis/job`, {
+            const response = await fetchAI(`${this.baseUrl}/analysis/job`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    job_description: jobDescription
-                }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ job_description: jobDescription }),
             });
 
             if (!response.ok) {
@@ -119,6 +123,12 @@ export class JobApiService {
             }
 
             const data = await response.json();
+
+            // Validate critical fields
+            if (!data || typeof data.description_summary !== 'string') {
+                throw new Error('Invalid response from analysis API');
+            }
+
             return data;
         } catch (error) {
             console.error('Error analyzing job:', error);
@@ -128,11 +138,9 @@ export class JobApiService {
 
     async getInterviewQuestions(params: InterviewQuestionRequest): Promise<InterviewQuestionsResponse> {
         try {
-            const response = await fetch(`${this.baseUrl}/questions`, {
+            const response = await fetchAI(`${this.baseUrl}/questions`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(params),
             });
 
@@ -141,6 +149,12 @@ export class JobApiService {
             }
 
             const data = await response.json();
+
+            // Validate critical fields
+            if (!data || !Array.isArray(data.questions) || data.questions.length === 0) {
+                throw new Error('Invalid response from questions API');
+            }
+
             return data;
         } catch (error) {
             console.error('Error fetching interview questions:', error);
